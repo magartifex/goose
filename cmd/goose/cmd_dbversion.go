@@ -1,9 +1,10 @@
 package main
 
 import (
-	"bitbucket.org/liamstask/goose/lib/goose"
 	"fmt"
 	"log"
+
+	"github.com/magartifex/goose/lib/goose"
 )
 
 var dbVersionCmd = &Command{

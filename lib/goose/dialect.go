@@ -2,15 +2,17 @@ package goose
 
 import (
 	"database/sql"
+
 	"github.com/mattn/go-sqlite3"
 )
 
 // SqlDialect abstracts the details of specific SQL dialects
 // for goose's few SQL specific statements
 type SqlDialect interface {
-	createVersionTableSql() string // sql string to create the goose_db_version table
-	insertVersionSql() string      // sql string to insert the initial version table row
-	dbVersionQuery(db *sql.DB) (*sql.Rows, error)
+	createVersionTableSql() string                // sql string to create the goose_db_version table
+	insertVersionSql() string                     // sql string to insert the initial version table row
+	dbVersionQuery(db *sql.DB) (*sql.Rows, error) // sql string to insert the initial version table row
+	getMigrationVersionQuery(db *sql.DB, versionID int64) (*MigrationRecord, error)
 }
 
 // drivers that we don't know about can ask for a dialect by name
@@ -27,9 +29,9 @@ func dialectByName(d string) SqlDialect {
 	return nil
 }
 
-////////////////////////////
+// //////////////////////////
 // Postgres
-////////////////////////////
+// //////////////////////////
 
 type PostgresDialect struct{}
 
@@ -48,7 +50,7 @@ func (pg PostgresDialect) insertVersionSql() string {
 }
 
 func (pg PostgresDialect) dbVersionQuery(db *sql.DB) (*sql.Rows, error) {
-	rows, err := db.Query("SELECT version_id, is_applied from goose_db_version ORDER BY id DESC")
+	rows, err := db.Query("SELECT version_id, is_applied from goose_db_version ORDER BY tstamp DESC")
 
 	// XXX: check for postgres specific error indicating the table doesn't exist.
 	// for now, assume any error is because the table doesn't exist,
@@ -60,28 +62,34 @@ func (pg PostgresDialect) dbVersionQuery(db *sql.DB) (*sql.Rows, error) {
 	return rows, err
 }
 
-////////////////////////////
+func (pg PostgresDialect) getMigrationVersionQuery(db *sql.DB, versionID int64) (*MigrationRecord, error) {
+	migration := &MigrationRecord{
+		VersionId: versionID,
+	}
+	return migration, db.QueryRow("SELECT is_applied WHERE version_id = ?", versionID).Scan(&migration.IsApplied)
+}
+
+// //////////////////////////
 // MySQL
-////////////////////////////
+// //////////////////////////
 
 type MySqlDialect struct{}
 
 func (m MySqlDialect) createVersionTableSql() string {
 	return `CREATE TABLE goose_db_version (
-                id serial NOT NULL,
                 version_id bigint NOT NULL,
                 is_applied boolean NOT NULL,
                 tstamp timestamp NULL default now(),
-                PRIMARY KEY(id)
+                PRIMARY KEY(version_id)
             );`
 }
 
 func (m MySqlDialect) insertVersionSql() string {
-	return "INSERT INTO goose_db_version (version_id, is_applied) VALUES (?, ?);"
+	return "INSERT INTO goose_db_version (version_id, is_applied) VALUES (?, ?) ON DUPLICATE KEY UPDATE is_applied = !is_applied;"
 }
 
 func (m MySqlDialect) dbVersionQuery(db *sql.DB) (*sql.Rows, error) {
-	rows, err := db.Query("SELECT version_id, is_applied from goose_db_version ORDER BY id DESC")
+	rows, err := db.Query("SELECT version_id, is_applied from goose_db_version ORDER BY tstamp DESC")
 
 	// XXX: check for mysql specific error indicating the table doesn't exist.
 	// for now, assume any error is because the table doesn't exist,
@@ -93,31 +101,44 @@ func (m MySqlDialect) dbVersionQuery(db *sql.DB) (*sql.Rows, error) {
 	return rows, err
 }
 
-////////////////////////////
+func (m MySqlDialect) getMigrationVersionQuery(db *sql.DB, versionID int64) (*MigrationRecord, error) {
+	migration := &MigrationRecord{
+		VersionId: versionID,
+	}
+	return migration, db.QueryRow("SELECT is_applied FROM goose_db_version WHERE version_id = ?", versionID).Scan(&migration.IsApplied)
+}
+
+// //////////////////////////
 // sqlite3
-////////////////////////////
+// //////////////////////////
 
 type Sqlite3Dialect struct{}
 
 func (m Sqlite3Dialect) createVersionTableSql() string {
 	return `CREATE TABLE goose_db_version (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                version_id INTEGER NOT NULL,
+                version_id INTEGER PRIMARY KEY,
                 is_applied INTEGER NOT NULL,
                 tstamp TIMESTAMP DEFAULT (datetime('now'))
             );`
 }
 
 func (m Sqlite3Dialect) insertVersionSql() string {
-	return "INSERT INTO goose_db_version (version_id, is_applied) VALUES (?, ?);"
+	return `INSERT INTO goose_db_version (version_id, is_applied) VALUES (?, ?)	ON DUPLICATE KEY UPDATE is_applied = !is_applied;`
 }
 
 func (m Sqlite3Dialect) dbVersionQuery(db *sql.DB) (*sql.Rows, error) {
-	rows, err := db.Query("SELECT version_id, is_applied from goose_db_version ORDER BY id DESC")
+	rows, err := db.Query("SELECT version_id, is_applied from goose_db_version ORDER BY tstamp DESC")
 
 	switch err.(type) {
 	case sqlite3.Error:
 		return nil, ErrTableDoesNotExist
 	}
 	return rows, err
+}
+
+func (m Sqlite3Dialect) getMigrationVersionQuery(db *sql.DB, versionID int64) (*MigrationRecord, error) {
+	migration := &MigrationRecord{
+		VersionId: versionID,
+	}
+	return migration, db.QueryRow("SELECT is_applied WHERE version_id = ?", versionID).Scan(&migration.IsApplied)
 }

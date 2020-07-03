@@ -80,10 +80,25 @@ func RunMigrationsOnDb(conf *DBConf, migrationsDir string, target int64, db *sql
 	direction := current < target
 	ms.Sort(direction)
 
-	fmt.Printf("goose: migrating db environment '%v', current version: %d, target: %d\n",
-		conf.Env, current, target)
+	fmt.Printf("goose: migrating db environment '%v', current version: %d, target: %d\n", conf.Env, current, target)
 
 	for _, m := range ms {
+		migrationRecord, err := conf.Driver.Dialect.getMigrationVersionQuery(db, m.Version)
+		switch err {
+		case nil:
+			if direction == migrationRecord.IsApplied {
+				continue
+			}
+
+		case sql.ErrNoRows:
+			if !direction {
+				continue
+			}
+
+		default:
+			fmt.Println("Здеся")
+			log.Fatal(err)
+		}
 
 		switch filepath.Ext(m.Source) {
 		case ".go":
@@ -120,9 +135,7 @@ func CollectMigrations(dirpath string, current, target int64) (m []*Migration, e
 				}
 			}
 
-			if versionFilter(v, current, target) {
-				m = append(m, newMigration(v, name))
-			}
+			m = append(m, newMigration(v, name))
 		}
 
 		return nil
