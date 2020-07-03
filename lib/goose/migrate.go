@@ -84,6 +84,14 @@ func RunMigrationsOnDb(conf *DBConf, migrationsDir string, target int64, db *sql
 		conf.Env, current, target)
 
 	for _, m := range ms {
+		ifExists, err := conf.Driver.Dialect.ifExistsVersionQuery(db, m.Version)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		if ifExists {
+			continue
+		}
 
 		switch filepath.Ext(m.Source) {
 		case ".go":
@@ -120,9 +128,7 @@ func CollectMigrations(dirpath string, current, target int64) (m []*Migration, e
 				}
 			}
 
-			if versionFilter(v, current, target) {
-				m = append(m, newMigration(v, name))
-			}
+			m = append(m, newMigration(v, name))
 		}
 
 		return nil
