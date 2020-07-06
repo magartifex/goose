@@ -112,6 +112,10 @@ func RunMigrationsOnDb(conf *DBConf, migrationsDir string, target int64, db *sql
 		}
 
 		fmt.Println("OK   ", filepath.Base(m.Source))
+
+		if !direction {
+			return nil
+		}
 	}
 
 	return nil
@@ -270,7 +274,7 @@ func createVersionTable(conf *DBConf, db *sql.DB) error {
 
 	version := 0
 	applied := true
-	if _, err := txn.Exec(d.insertVersionSql(), version, applied); err != nil {
+	if _, err := txn.Exec(d.insertVersionSql(), version, applied, applied); err != nil {
 		txn.Rollback()
 		return err
 	}
@@ -389,7 +393,7 @@ func FinalizeMigration(conf *DBConf, txn *sql.Tx, direction bool, v int64) error
 
 	// XXX: drop goose_db_version table on some minimum version number?
 	stmt := conf.Driver.Dialect.insertVersionSql()
-	if _, err := txn.Exec(stmt, v, direction); err != nil {
+	if _, err := txn.Exec(stmt, v, direction, direction); err != nil {
 		txn.Rollback()
 		return err
 	}

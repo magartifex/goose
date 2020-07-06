@@ -85,7 +85,7 @@ func (m MySqlDialect) createVersionTableSql() string {
 }
 
 func (m MySqlDialect) insertVersionSql() string {
-	return "INSERT INTO goose_db_version (version_id, is_applied) VALUES (?, ?) ON DUPLICATE KEY UPDATE is_applied = !is_applied;"
+	return "INSERT INTO goose_db_version (version_id, is_applied) VALUES (?, ?) ON DUPLICATE KEY UPDATE is_applied = ?;"
 }
 
 func (m MySqlDialect) dbVersionQuery(db *sql.DB) (*sql.Rows, error) {
