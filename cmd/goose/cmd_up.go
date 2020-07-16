@@ -26,7 +26,7 @@ func upRun(cmd *Command, args ...string) {
 		log.Fatal(err)
 	}
 
-	if err := goose.RunMigrations(conf, conf.MigrationsDir, target); err != nil {
+	if err := goose.RunMigrations(conf, conf.MigrationsDir, target, true); err != nil {
 		log.Fatal(err)
 	}
 }

@@ -48,7 +48,7 @@ func newMigration(v int64, src string) *Migration {
 	return &Migration{v, -1, -1, src}
 }
 
-func RunMigrations(conf *DBConf, migrationsDir string, target int64) (err error) {
+func RunMigrations(conf *DBConf, migrationsDir string, target int64, forward bool) (err error) {
 
 	db, err := OpenDBFromDBConf(conf)
 	if err != nil {
@@ -56,11 +56,11 @@ func RunMigrations(conf *DBConf, migrationsDir string, target int64) (err error)
 	}
 	defer db.Close()
 
-	return RunMigrationsOnDb(conf, migrationsDir, target, db)
+	return RunMigrationsOnDb(forward, conf, migrationsDir, target, db)
 }
 
 // Runs migration on a specific database instance.
-func RunMigrationsOnDb(conf *DBConf, migrationsDir string, target int64, db *sql.DB) (err error) {
+func RunMigrationsOnDb(forward bool, conf *DBConf, migrationsDir string, target int64, db *sql.DB) (err error) {
 	current, err := EnsureDBVersion(conf, db)
 	if err != nil {
 		return err
@@ -77,8 +77,7 @@ func RunMigrationsOnDb(conf *DBConf, migrationsDir string, target int64, db *sql
 	}
 
 	ms := migrationSorter(migrations)
-	direction := current < target
-	ms.Sort(direction)
+	ms.Sort(forward)
 
 	fmt.Printf("goose: migrating db environment '%v', current version: %d, target: %d\n", conf.Env, current, target)
 
@@ -86,25 +85,24 @@ func RunMigrationsOnDb(conf *DBConf, migrationsDir string, target int64, db *sql
 		migrationRecord, err := conf.Driver.Dialect.getMigrationVersionQuery(db, m.Version)
 		switch err {
 		case nil:
-			if direction == migrationRecord.IsApplied {
+			if forward == migrationRecord.IsApplied {
 				continue
 			}
 
 		case sql.ErrNoRows:
-			if !direction {
+			if !forward {
 				continue
 			}
 
 		default:
-			fmt.Println("Здеся")
 			log.Fatal(err)
 		}
 
 		switch filepath.Ext(m.Source) {
 		case ".go":
-			err = runGoMigration(conf, m.Source, m.Version, direction)
+			err = runGoMigration(conf, m.Source, m.Version, forward)
 		case ".sql":
-			err = runSQLMigration(conf, db, m.Source, m.Version, direction)
+			err = runSQLMigration(conf, db, m.Source, m.Version, forward)
 		}
 
 		if err != nil {
@@ -113,7 +111,7 @@ func RunMigrationsOnDb(conf *DBConf, migrationsDir string, target int64, db *sql
 
 		fmt.Println("OK   ", filepath.Base(m.Source))
 
-		if !direction {
+		if !forward {
 			return nil
 		}
 	}

@@ -30,11 +30,11 @@ func redoRun(cmd *Command, args ...string) {
 		log.Fatal(err)
 	}
 
-	if err := goose.RunMigrations(conf, conf.MigrationsDir, previous); err != nil {
+	if err := goose.RunMigrations(conf, conf.MigrationsDir, previous, false); err != nil {
 		log.Fatal(err)
 	}
 
-	if err := goose.RunMigrations(conf, conf.MigrationsDir, current); err != nil {
+	if err := goose.RunMigrations(conf, conf.MigrationsDir, current, true); err != nil {
 		log.Fatal(err)
 	}
 }
